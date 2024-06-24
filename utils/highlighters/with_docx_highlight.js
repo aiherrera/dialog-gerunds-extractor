@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import mammoth from "mammoth";
 import { Document, Packer, Paragraph, TextRun } from "docx";
-import { REGEX, loadExclusionList } from "../index.js";
+import { REGEX, loadExclusionList, transformFilename } from "../index.js";
 
 export const highlightGerundsInDocx = async (
   inputFilePath,
@@ -42,6 +42,12 @@ export const highlightGerundsInDocx = async (
                     color: "FF0000", // Red color for highlighted gerunds
                   })
                 );
+              } else {
+                runs.push(
+                  new TextRun({
+                    text: match[0],
+                  })
+                );
               }
               lastIndex = REGEX.gerundRegex.lastIndex;
             }
@@ -60,13 +66,14 @@ export const highlightGerundsInDocx = async (
     });
 
     // Create the full output file path
-    const fileName =
-      path.basename(inputFilePath, path.extname(inputFilePath)) + ".docx";
-    const outputFilePath = path.join(outputDirectory, fileName);
+    const fileName = path.basename(inputFilePath, path.extname(inputFilePath));
+    //NOTE - The transformFilename function is used to clean up the filename
+    const fixedFileName = transformFilename(fileName) + ".docx";
+
+    const outputFilePath = path.join(outputDirectory, fixedFileName);
 
     const buffer = await Packer.toBuffer(doc);
     fs.writeFileSync(outputFilePath, buffer);
-    console.log(`Gerunds highlighted in: ${outputFilePath}`);
   } catch (error) {
     console.error("Error processing document:", error);
   }

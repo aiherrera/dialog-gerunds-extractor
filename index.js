@@ -43,51 +43,59 @@ if (!fs.existsSync(highlightedOutputDirectory)) {
   fs.mkdirSync(highlightedOutputDirectory, { recursive: true });
 }
 
-// convertAllDocFilesInFolder(corpusDirectory, convertedOutputDirectory);
 fs.readdir(corpusDirectory, async (err, files) => {
   if (err) {
     console.error("Error reading the folder:", err);
     return;
   }
 
-  // Filter for .doc|.rtf files
-  const docFiles = files.filter((file) => file.match(/\.(doc|rtf)$/i));
+  // Filter out hidden files/directories (starting with '.DS_Store' etc)
+  const visibleFiles = files.filter((file) => !file.startsWith("."));
 
-  for (const file of docFiles) {
+  // Now loop through the visibleFiles array
+  for (const file of visibleFiles) {
+    // Process all files, not just .doc|.rtf
     const documentPath = path.join(corpusDirectory, file);
+    const filename = file.replace(/\.(doc|rtf|docx)$/i, "");
+    const convertedDocumentPath = path.join(
+      convertedOutputDirectory,
+      `${filename}.docx`
+    );
+
     try {
-      // Convert each .doc|.rtf file to .docx
-      await convertDocToDocxWithLibreOffice(
-        documentPath,
-        convertedOutputDirectory
-      );
+      // Handle .doc and .rtf files
+      if (file.match(/\.(doc|rtf)$/i)) {
+        await convertDocToDocxWithLibreOffice(
+          documentPath,
+          convertedOutputDirectory
+        );
+      }
+      // Handle .docx files
+      else if (file.match(/\.(docx)$/i)) {
+        fs.copyFileSync(documentPath, convertedDocumentPath);
+      }
 
-      const filename = file.replace(/\.(doc|rtf)$/i, "");
-
-      // generate a docx file from the highlighted markdown file
+      // Generate a docx file with highlighted gerunds (for all files)
       const metadata = {
         creator: "Alain Iglesias",
-        title: file.replace(/\.(doc|rtf)$/i, ""),
+        title: filename,
         description: "Periphrastic Gerunds highlighted in document",
       };
 
-      const convertedDocumentPath = path.join(
-        convertedOutputDirectory,
-        `${filename}.docx`
-      );
       const exclusionListPath = path.join(
         __dirname,
         "utils",
         "exclusion_list.txt"
       );
+
       await highlightGerundsInDocx(
         convertedDocumentPath,
         highlightedOutputDirectory,
         exclusionListPath,
         metadata
       );
-    } catch (conversionError) {
-      console.error("Conversion error:", conversionError);
+    } catch (error) {
+      console.error("Error processing file:", error);
     }
   }
 });

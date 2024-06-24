@@ -1,4 +1,4 @@
 export const REGEX = {
-  gerundRegex: /\b\w*ndo\w*\b/gi,
+  gerundRegex: /(?<!\w)(\w+ndo)(?!\w)/giu,
   // ... other global variables
 };

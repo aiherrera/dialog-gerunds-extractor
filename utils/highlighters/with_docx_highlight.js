@@ -2,88 +2,141 @@ import fs from "fs";
 import path from "path";
 import mammoth from "mammoth";
 import { Document, Packer, Paragraph, TextRun } from "docx";
-import { REGEX, loadExclusionList, transformFilename } from "../index.js";
+import { findGerunds } from "../gerunds.js";
+import { loadExclusionList } from "../exclusion-list.js";
+import { transformFilename } from "../transform-filename.js";
+import { paragraphsFromText } from "../paragraphs.js";
+
+const contextAround = (text, start, end, radius = 72) => {
+  let left = Math.max(0, start - radius);
+  let right = Math.min(text.length, end + radius);
+
+  if (left > 0) {
+    const space = text.indexOf(" ", left);
+    if (space !== -1 && space < start) left = space + 1;
+  }
+
+  if (right < text.length) {
+    const space = text.lastIndexOf(" ", right);
+    if (space > end) right = space;
+  }
+
+  const tidy = (value) => value.replace(/\s+/g, " ");
+
+  return {
+    before: tidy(text.slice(left, start)).replace(/^\s+/, ""),
+    match: text.slice(start, end),
+    after: tidy(text.slice(end, right)).replace(/\s+$/, ""),
+  };
+};
+
+const runsForParagraph = (paragraphText, exclusionList, speaker) => {
+  const runs = [];
+  const records = [];
+  let cursor = 0;
+  let highlighted = 0;
+  let excluded = 0;
+
+  for (const gerund of findGerunds(paragraphText, exclusionList)) {
+    if (gerund.start > cursor) {
+      runs.push(new TextRun(paragraphText.slice(cursor, gerund.start)));
+    }
+
+    const text = paragraphText.slice(gerund.start, gerund.end);
+    const context = contextAround(paragraphText, gerund.start, gerund.end);
+    records.push({
+      word: gerund.word.toLowerCase(),
+      excluded: gerund.excluded,
+      speaker,
+      ending: gerund.ending,
+      clitic: gerund.clitic.toLowerCase(),
+      crossesTag: gerund.crossesTag,
+      before: context.before,
+      match: context.match,
+      after: context.after,
+    });
+
+    if (gerund.excluded) {
+      excluded += 1;
+      runs.push(new TextRun(text));
+    } else {
+      highlighted += 1;
+      runs.push(
+        new TextRun({
+          text,
+          color: "FF0000",
+        })
+      );
+    }
+
+    cursor = gerund.end;
+  }
+
+  if (cursor < paragraphText.length) {
+    runs.push(new TextRun(paragraphText.slice(cursor)));
+  }
+
+  if (runs.length === 0) {
+    runs.push(new TextRun(""));
+  }
+
+  return { runs, highlighted, excluded, records };
+};
 
 export const highlightGerundsInDocx = async (
   inputFilePath,
   outputDirectory,
   exclusionListPath,
-  ...props
+  metadata = {}
 ) => {
-  try {
-    const exclusionList = loadExclusionList(exclusionListPath);
+  const exclusionList = loadExclusionList(exclusionListPath);
+  const result = await mammoth.extractRawText({ path: inputFilePath });
+  const paragraphs = paragraphsFromText(result.value);
 
-    // const text = fs.readFileSync(inputFilePath, "utf-8");
-    const result = await mammoth.extractRawText({ path: inputFilePath });
-    let modifiedText = result.value;
+  let highlighted = 0;
+  let excluded = 0;
+  const gerunds = [];
 
-    const paragraphs = modifiedText.split("\n").filter((p) => p.trim() !== "");
+  const doc = new Document({
+    creator: metadata.creator,
+    title: metadata.title,
+    description: metadata.description,
+    sections: [
+      {
+        properties: {},
+        children: paragraphs.map((paragraph, index) => {
+          const paragraphRuns = runsForParagraph(
+            paragraph.text,
+            exclusionList,
+            paragraph.speaker
+          );
+          highlighted += paragraphRuns.highlighted;
+          excluded += paragraphRuns.excluded;
+          gerunds.push(
+            ...paragraphRuns.records.map((record) => ({
+              ...record,
+              paragraph: index,
+            }))
+          );
 
-    const doc = new Document({
-      props,
-      sections: [
-        {
-          properties: {},
-          children: paragraphs.map((paragraphText, index) => {
-            const runs = [];
-            let lastIndex = 0;
-            let match = "";
+          if (index < paragraphs.length - 1) {
+            paragraphRuns.runs.push(new TextRun({ break: 1 }));
+          }
 
-            while ((match = REGEX.gerundRegex.exec(paragraphText))) {
-              runs.push(
-                new TextRun(paragraphText.slice(lastIndex, match.index))
-              );
+          return new Paragraph({ children: paragraphRuns.runs });
+        }),
+      },
+    ],
+  });
 
-              // Check if the match is in the exclusion list
-              if (!exclusionList.has(match[0].toLowerCase())) {
-                runs.push(
-                  new TextRun({
-                    text: match[0],
-                    color: "FF0000", // Red color for highlighted gerunds
-                  })
-                );
-              } else {
-                runs.push(
-                  new TextRun({
-                    text: match[0],
-                  })
-                );
-              }
-              lastIndex = REGEX.gerundRegex.lastIndex;
-            }
+  const fileName = path.basename(inputFilePath, path.extname(inputFilePath));
+  const outputFilePath = path.join(
+    outputDirectory,
+    `${transformFilename(fileName)}.docx`
+  );
 
-            runs.push(new TextRun(paragraphText.slice(lastIndex)));
+  const buffer = await Packer.toBuffer(doc);
+  fs.writeFileSync(outputFilePath, buffer);
 
-            // Add a line break after each paragraph except the last
-            if (index < paragraphs.length - 1) {
-              runs.push(new TextRun({ break: 1 }));
-            }
-
-            return new Paragraph({ children: runs });
-          }),
-        },
-      ],
-    });
-
-    // Create the full output file path
-    const fileName = path.basename(inputFilePath, path.extname(inputFilePath));
-    //NOTE - The transformFilename function is used to clean up the filename
-    const fixedFileName = transformFilename(fileName) + ".docx";
-
-    const outputFilePath = path.join(outputDirectory, fixedFileName);
-
-    const buffer = await Packer.toBuffer(doc);
-    fs.writeFileSync(outputFilePath, buffer);
-  } catch (error) {
-    console.error("Error processing document:", error);
-  }
+  return { highlighted, excluded, gerunds, outputFilePath, paragraphs };
 };
-
-// Example usage (remove if you are calling from index.js):
-// const inputFilePath = "./corpus/converted_to_docx/001 LHAB_H11_001 CON E.docx";
-// const outputDirectory = "./output/";
-
-// highlightGerundsInDocx(inputFilePath, outputDirectory, {
-//  creator: "Your Name",
-//  // ... other document properties
-// });

@@ -1,101 +1,206 @@
 import path from "path";
-import fs from "fs";
+import { copyFile, mkdir, readdir } from "fs/promises";
 import { fileURLToPath } from "url";
 
-import { convertDocToDocxWithLibreOffice } from "./utils/index.js";
-import { highlightGerundsInDocx } from "./utils/index.js";
+import { convertToDocxWithTextutil } from "./utils/converters/convert_to_docx_with_textutil.js";
+import { highlightGerundsInDocx } from "./utils/highlighters/with_docx_highlight.js";
+import { transformFilename } from "./utils/transform-filename.js";
+import { writeStats } from "./utils/stats.js";
+import { writeConcordance } from "./utils/concordance.js";
+import { writeCache } from "./utils/cache.js";
 
-/**
- * Since we are using ESM modules, we need to use the fileURLToPath function
- * to get the __filename and then use the path module to get the __dirname.
- */
-// Get the __filename
-const __filename = fileURLToPath(import.meta.url);
-// Get the __dirname
-const __dirname = path.dirname(__filename);
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-// Database of documents (original corpus)
-const corpusDirectory = path.join(__dirname, "corpus");
-// output for converted documents (doc to docx | rtf to docx)
-const convertedOutputDirectory = path.join(
-  __dirname,
-  "output",
-  "converted_to_docx"
+const args = process.argv.slice(2);
+const hasFlag = (name) => args.includes(name);
+const option = (name, fallback) => {
+  const index = args.indexOf(name);
+  if (index === -1) return fallback;
+  const value = args[index + 1];
+  if (!value || value.startsWith("--")) return fallback;
+  return value;
+};
+
+const progress = hasFlag("--progress");
+const corpusDirectory = path.resolve(
+  option("--corpus", path.join(__dirname, "corpus"))
 );
-// output for highlighted documents (regex matched gerunds in docx files)
-const highlightedOutputDirectory = path.join(
-  __dirname,
-  "output",
-  "highlighted"
+const outputDirectory = path.resolve(
+  option("--output", path.join(__dirname, "output"))
 );
+const convertedOutputDirectory = path.join(outputDirectory, "converted_to_docx");
+const highlightedOutputDirectory = path.join(outputDirectory, "highlighted");
+const exclusionListPath = path.join(__dirname, "utils", "exclusion_list.txt");
 
-if (!fs.existsSync(corpusDirectory)) {
-  fs.mkdirSync(corpusDirectory, { recursive: true });
+const emit = (payload) => {
+  if (!progress) return;
+  process.stdout.write(`${JSON.stringify(payload)}\n`);
+};
+
+const say = (line) => {
+  if (!progress) console.log(line);
+};
+
+if (!hasFlag("--corpus")) {
+  await mkdir(corpusDirectory, { recursive: true });
+}
+await mkdir(convertedOutputDirectory, { recursive: true });
+await mkdir(highlightedOutputDirectory, { recursive: true });
+
+let files;
+try {
+  files = (await readdir(corpusDirectory))
+    .filter((file) => !file.startsWith("."))
+    .filter((file) => /\.(doc|rtf|docx)$/i.test(file))
+    .sort();
+} catch (error) {
+  const message = `No pude abrir el corpus. ${error.message}`;
+  emit({ event: "error", message });
+  console.error(message);
+  process.exit(1);
 }
 
-// Ensure the output folder exist
-if (!fs.existsSync(convertedOutputDirectory)) {
-  fs.mkdirSync(convertedOutputDirectory, { recursive: true });
+if (files.length === 0) {
+  const message = `No hay archivos .doc, .docx o .rtf en ${corpusDirectory}`;
+  emit({ event: "error", message });
+  console.error(message);
+  process.exit(1);
 }
 
-// Ensure the output folder exist
-if (!fs.existsSync(highlightedOutputDirectory)) {
-  fs.mkdirSync(highlightedOutputDirectory, { recursive: true });
-}
+emit({ event: "start", total: files.length, corpus: corpusDirectory });
+say("highlighted  excluded  informant  interviewer  interview");
 
-fs.readdir(corpusDirectory, async (err, files) => {
-  if (err) {
-    console.error("Error reading the folder:", err);
-    return;
-  }
+const results = [];
+const cacheFiles = [];
+let highlightedTotal = 0;
+let excludedTotal = 0;
 
-  // Filter out hidden files/directories (starting with '.DS_Store' etc)
-  const visibleFiles = files.filter((file) => !file.startsWith("."));
+for (const [index, file] of files.entries()) {
+  const documentPath = path.join(corpusDirectory, file);
+  const filename = file.replace(/\.(doc|rtf|docx)$/i, "");
+  const convertedDocumentPath = path.join(
+    convertedOutputDirectory,
+    `${filename}.docx`
+  );
+  const code = transformFilename(filename);
 
-  // Now loop through the visibleFiles array
-  for (const file of visibleFiles) {
-    // Process all files, not just .doc|.rtf
-    const documentPath = path.join(corpusDirectory, file);
-    const filename = file.replace(/\.(doc|rtf|docx)$/i, "");
-    const convertedDocumentPath = path.join(
-      convertedOutputDirectory,
-      `${filename}.docx`
-    );
+  emit({
+    event: "begin",
+    index: index + 1,
+    total: files.length,
+    file,
+    code,
+  });
 
-    try {
-      // Handle .doc and .rtf files
-      if (file.match(/\.(doc|rtf)$/i)) {
-        await convertDocToDocxWithLibreOffice(
-          documentPath,
-          convertedOutputDirectory
-        );
-      }
-      // Handle .docx files
-      else if (file.match(/\.(docx)$/i)) {
-        fs.copyFileSync(documentPath, convertedDocumentPath);
-      }
+  try {
+    if (/\.(doc|rtf)$/i.test(file)) {
+      await convertToDocxWithTextutil(documentPath, convertedOutputDirectory);
+    } else {
+      await copyFile(documentPath, convertedDocumentPath);
+    }
 
-      // Generate a docx file with highlighted gerunds (for all files)
-      const metadata = {
+    const { highlighted, excluded, gerunds, paragraphs } = await highlightGerundsInDocx(
+      convertedDocumentPath,
+      highlightedOutputDirectory,
+      exclusionListPath,
+      {
         creator: "Alain Iglesias",
         title: filename,
-        description: "Periphrastic Gerunds highlighted in document",
-      };
+        description: "Periphrastic gerunds highlighted in document",
+      }
+    );
 
-      const exclusionListPath = path.join(
-        __dirname,
-        "utils",
-        "exclusion_list.txt"
-      );
+    results.push({ file, code, highlighted, excluded, gerunds, failed: false });
+    cacheFiles.push({ file, code, paragraphs });
+    const informant = gerunds.filter(
+      (gerund) => !gerund.excluded && gerund.speaker === "I"
+    ).length;
+    const interviewer = gerunds.filter(
+      (gerund) => !gerund.excluded && gerund.speaker === "E"
+    ).length;
+    highlightedTotal += highlighted;
+    excludedTotal += excluded;
 
-      await highlightGerundsInDocx(
-        convertedDocumentPath,
-        highlightedOutputDirectory,
-        exclusionListPath,
-        metadata
-      );
-    } catch (error) {
-      console.error("Error processing file:", error);
+    const words = [];
+    const seen = new Set();
+    for (const gerund of gerunds) {
+      if (gerund.excluded || seen.has(gerund.word)) continue;
+      seen.add(gerund.word);
+      words.push(gerund.word);
+      if (words.length === 6) break;
     }
+
+    say(
+      `${String(highlighted).padStart(11)}  ${String(excluded).padStart(8)}  ${String(informant).padStart(9)}  ${String(interviewer).padStart(11)}  ${code}`
+    );
+    emit({
+      event: "file",
+      index: index + 1,
+      total: files.length,
+      file,
+      code,
+      highlighted,
+      excluded,
+      informant,
+      interviewer,
+      highlightedTotal,
+      excludedTotal,
+      words,
+      failed: false,
+    });
+  } catch (error) {
+    results.push({
+      file,
+      code,
+      highlighted: 0,
+      excluded: 0,
+      gerunds: [],
+      failed: true,
+    });
+    const message = error instanceof Error ? error.message : String(error);
+    if (!progress) console.error(`Error processing ${file}:`, message);
+    emit({
+      event: "file",
+      index: index + 1,
+      total: files.length,
+      file,
+      code,
+      highlighted: 0,
+      excluded: 0,
+      highlightedTotal,
+      excludedTotal,
+      words: [],
+      failed: true,
+      message,
+    });
   }
+}
+
+const { summary, statsPath, typePath, filePath } = writeStats(
+  results,
+  outputDirectory,
+  {
+    request: "gerundios",
+    reading: "Gerundios en -ando, -iendo o -yendo, con o sin pronombre.",
+    kind: "gerundios",
+  }
+);
+const concordancePath = writeConcordance(results, outputDirectory, {
+  request: "gerundios",
+  reading: "Gerundios en -ando, -iendo o -yendo, con o sin pronombre.",
+  kind: "gerundios",
 });
+if (cacheFiles.length > 0) writeCache(outputDirectory, cacheFiles);
+
+emit({
+  event: "done",
+  highlighted: highlightedTotal,
+  excluded: excludedTotal,
+  interviews: results.length,
+  concordance: concordancePath,
+});
+
+say(`\n${summary}\n`);
+say(
+  `Stats written to\n  ${statsPath}\n  ${typePath}\n  ${filePath}\n  ${concordancePath}`
+);

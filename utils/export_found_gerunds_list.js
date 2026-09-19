@@ -1,86 +1,49 @@
-const createReport = require('docx-templates').default;
-const textract = require('textract');
-const mammoth = require("mammoth");
-const { exec } = require('child_process');
-const fs = require("fs");
-const path = require("path");
+import fs from "fs";
+import path from "path";
+import { pathToFileURL } from "url";
+import mammoth from "mammoth";
+import { findGerunds } from "./gerunds.js";
+import { loadExclusionList } from "./exclusion-list.js";
 
-// Regular expression for matching gerunds
-const gerundRegex = /\b\w*ndo\w*\b/g;
+const isDirectRun =
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
 
-// Load exclusion list from a text file
-const loadExclusionList = (filePath) => {
-  return new Promise((resolve, reject) => {
-    fs.readFile(filePath, { encoding: "utf-8" }, (err, data) => {
-      if (err) reject(err);
-      else resolve(new Set(data.split("\n")));
+export const collectGerunds = async (directoryPath, exclusionListPath) => {
+  const exclusionList = loadExclusionList(exclusionListPath);
+  const files = fs
+    .readdirSync(directoryPath)
+    .filter((file) => file.endsWith(".docx") && !file.startsWith("."));
+
+  const counts = new Map();
+
+  for (const file of files) {
+    const result = await mammoth.extractRawText({
+      path: path.join(directoryPath, file),
     });
-  });
-};
 
-// Process a single Word document and return matches
-const processDocument = async (filePath, exclusionList) => {
-  try {
-    // Note: Here you would adjust the logic to handle .doc files if necessary
-    const result = await mammoth.extractRawText({ path: filePath });
-    const matches = result.value.match(gerundRegex) || [];
-    const filteredMatches = matches.filter((word) => !exclusionList.has(word.toLowerCase()));
-    return filteredMatches;
-  } catch (error) {
-    console.error(`Error processing ${filePath}:`, error);
-    return [];
-  }
-};
-
-// Read all .doc and .docx files from a directory
-const readDocumentsFromDirectory = (directoryPath) => {
-  return new Promise((resolve, reject) => {
-    fs.readdir(directoryPath, (err, files) => {
-      if (err) {
-        reject(err);
-      } else {
-        const documentFiles = files.filter(file => file.endsWith('.docx')).map(file => path.join(directoryPath, file));
-        resolve(documentFiles);
-      }
-    });
-  });
-};
-
-// Export results to a file
-const exportResultsToFile = (uniqueMatches, outputPath) => {
-  return new Promise((resolve, reject) => {
-    const data = uniqueMatches.join("\n");
-    fs.writeFile(outputPath, data, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-};
-
-// Main function to process documents from a directory, remove duplicate gerunds, and export to a file
-const processDocumentsFromDirectory = async (directoryPath, exclusionListPath, outputPath) => {
-  const exclusionList = await loadExclusionList(exclusionListPath);
-  const docPaths = await readDocumentsFromDirectory(directoryPath);
-  let allMatches = [];
-
-  for (const docPath of docPaths) {
-    const matches = await processDocument(docPath, exclusionList);
-    allMatches = allMatches.concat(matches);
+    for (const gerund of findGerunds(result.value, exclusionList)) {
+      if (gerund.excluded) continue;
+      const key = gerund.word.toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
   }
 
-  // Remove duplicates
-  const uniqueMatches = [...new Set(allMatches.map(match => match.toLowerCase()))];
-  
-  // Export unique gerunds to a file
-  await exportResultsToFile(uniqueMatches, outputPath);
-  console.log(`Unique gerunds from all documents have been exported to ${outputPath}`);
+  return counts;
 };
 
-// Example usage
-const directoryPath = "./corpus/converted_docx";
-const exclusionListPath = "./exclusion_list.txt";
-const outputPath = "output.txt"; // Path for the output file
+if (isDirectRun) {
+  const directoryPath = process.argv[2] ?? "./output/converted_to_docx";
+  const exclusionListPath =
+    process.argv[3] ?? path.join("utils", "exclusion_list.txt");
+  const outputPath = process.argv[4] ?? "output/gerunds.txt";
 
-processDocumentsFromDirectory(directoryPath, exclusionListPath, outputPath)
-  .then(() => console.log("Processing completed."))
-  .catch((error) => console.error("An error occurred:", error));
+  const counts = await collectGerunds(directoryPath, exclusionListPath);
+  const lines = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([word, count]) => `${count}\t${word}`);
+
+  fs.mkdirSync(path.dirname(outputPath), { recursive: true });
+  fs.writeFileSync(outputPath, `${lines.join("\n")}\n`);
+  console.log(`Wrote ${lines.length} gerund types to ${outputPath}`);
+}

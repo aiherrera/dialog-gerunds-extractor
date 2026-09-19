@@ -4,14 +4,14 @@ This Node.js application extracts and highlights gerunds from a corpus of `.doc`
 
 ## Features
 
-- **Converts documents to .docx:** Uses LibreOffice to convert legacy `.doc` and `.rtf` files to `.docx` for consistent processing.
-- **Identifies and highlights gerunds:** Uses regular expressions and the `docx` library to highlight gerunds within the text.
+- **Converts documents to .docx:** Uses macOS `textutil` to convert legacy `.doc` and `.rtf` files to `.docx`. The converted text matches the original.
+- **Identifies and highlights gerunds:** Finds `-ando`, `-iendo`, and `-yendo`, including accented forms with pronouns (`dándole`) and words split by a transcription tag (`conversa<alargamiento/>ndo`).
 - **Exclusion list:** Allows you to specify words to be excluded from highlighting, even if they match the gerund pattern.
 
 ## Requirements
 
-- **Node.js:** Version 12.20.0 or higher ([https://nodejs.org/](https://nodejs.org/))
-- **LibreOffice:** Installed and accessible from the command line (for `.doc` and `.rtf` conversion)
+- **Node.js:** Version 20 or higher ([https://nodejs.org/](https://nodejs.org/))
+- **macOS:** `textutil` comes with the system and converts `.doc` and `.rtf`. No LibreOffice install is required.
 
 ## Installation
 
@@ -44,7 +44,7 @@ This Node.js application extracts and highlights gerunds from a corpus of `.doc`
 
 2. **Exclusion List (Optional):**
 
-   - Create a text file named `exclusion_list.txt` in the project root directory.
+   - Edit `utils/exclusion_list.txt`.
    - List one excluded word per line in the file.
    - Example (`exclusion_list.txt`):
      ```
@@ -69,6 +69,20 @@ The processed files with highlighted gerunds will be saved in the following dire
 
 - **`output/converted_to_docx`:** Converted `.docx` versions of the input files (if applicable).
 - **`output/highlighted`:** Final `.docx` files with highlighted gerunds.
+- **`output/stats.txt`:** Totals by speaker, sex, interview group, ending, and pronoun.
+- **`output/gerunds-by-type.tsv`:** Every highlighted gerund and how often it occurs.
+- **`output/gerunds-by-file.tsv`:** Counts per interview, including informant and interviewer.
+- **`output/concordance.json`:** Examples for the Mac app.
+
+## Mac app
+
+Andante is the screenshot window. **Elegir corpus** opens the `corpus` folder and processes it; when it finishes, the summary is on screen. Concordance, frequencies, and the summary use the same filters.
+
+```bash
+macos/open.command
+```
+
+The app is `macos/Andante.app`.
 
 ## Contributing
 
@@ -92,4 +106,4 @@ This project is licensed under the [MIT License](LICENSE).
 
 - [Mammoth.js](https://www.npmjs.com/package/mammoth): For converting .docx files to text.
 - [docx](https://www.npmjs.com/package/docx): For creating and manipulating .docx files.
-- [LibreOffice](https://www.libreoffice.org/): For converting .doc and .rtf files to .docx.
+- [textutil](https://ss64.com/mac/textutil.html): For converting `.doc` and `.rtf` files to `.docx` on macOS.

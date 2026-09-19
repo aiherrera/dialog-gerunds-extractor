@@ -22,7 +22,7 @@ struct AboutView: View {
                 .foregroundStyle(Theme.ink)
                 .padding(.top, 22)
 
-            Text("Enumera los gerundios de las entrevistas y los muestra en el resumen, la concordancia y las frecuencias.")
+            Text("Consulta el corpus en español. Andante dice qué entendió y cuenta solo eso.")
                 .font(.system(size: 13, design: .serif))
                 .foregroundStyle(Theme.muted)
                 .fixedSize(horizontal: false, vertical: true)

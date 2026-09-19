@@ -179,3 +179,54 @@ private final class StderrBox: @unchecked Sendable {
     var text = ""
     var done = false
 }
+
+struct InterpretedRequest: Sendable {
+    var ok = false
+    var reading = ""
+    var kind = ""
+    var message = ""
+}
+
+enum RequestInterpreter {
+    static func read(_ request: String, project: URL, node: URL) async -> InterpretedRequest {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .userInitiated).async {
+                let process = Process()
+                process.executableURL = node
+                process.currentDirectoryURL = project
+                process.arguments = [
+                    project.appendingPathComponent("utils/interpret-cli.js").path,
+                    "--request", request,
+                ]
+                let output = Pipe()
+                process.standardOutput = output
+                process.standardError = Pipe()
+                do {
+                    try process.run()
+                    process.waitUntilExit()
+                    let data = output.fileHandleForReading.readDataToEndOfFile()
+                    if let wire = try? JSONDecoder().decode(InterpretWire.self, from: data) {
+                        continuation.resume(returning: InterpretedRequest(
+                            ok: wire.ok,
+                            reading: wire.reading,
+                            kind: wire.kind,
+                            message: wire.message
+                        ))
+                        return
+                    }
+                } catch {
+                    continuation.resume(returning: InterpretedRequest(message: "No pude leer la petición."))
+                    return
+                }
+                continuation.resume(returning: InterpretedRequest(message: "No pude leer la petición."))
+            }
+        }
+    }
+}
+
+private struct InterpretWire: Decodable {
+    var ok: Bool
+    var reading: String
+    var kind: String
+    var message: String
+}

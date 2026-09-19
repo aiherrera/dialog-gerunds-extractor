@@ -8,6 +8,8 @@ import { transformFilename } from "./utils/transform-filename.js";
 import { writeStats } from "./utils/stats.js";
 import { writeConcordance } from "./utils/concordance.js";
 import { writeCache } from "./utils/cache.js";
+import { runQuery } from "./utils/query.js";
+import { interpret } from "./utils/interpret.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +33,29 @@ const outputDirectory = path.resolve(
 const convertedOutputDirectory = path.join(outputDirectory, "converted_to_docx");
 const highlightedOutputDirectory = path.join(outputDirectory, "highlighted");
 const exclusionListPath = path.join(__dirname, "utils", "exclusion_list.txt");
+
+if (hasFlag("--interpret")) {
+  const result = interpret(option("--request", ""));
+  process.stdout.write(
+    `${JSON.stringify({
+      ok: result.ok,
+      reading: result.reading,
+      kind: result.kind,
+      message: result.message,
+    })}\n`
+  );
+  process.exit(0);
+}
+
+if (hasFlag("--query")) {
+  await runQuery({
+    request: option("--request", "gerundios"),
+    outputDirectory,
+    exclusionListPath,
+    progress,
+  });
+  process.exit(process.exitCode ?? 0);
+}
 
 const emit = (payload) => {
   if (!progress) return;

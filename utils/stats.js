@@ -116,7 +116,7 @@ export const writeStats = (results, outputDirectory, meta = {}) => {
   const sections = [];
   if (meta.request || meta.reading) {
     sections.push(
-      `Recuento: ${meta.request ?? ""}`,
+      `Consulta: ${meta.request ?? ""}`,
       meta.reading ?? "",
       ""
     );

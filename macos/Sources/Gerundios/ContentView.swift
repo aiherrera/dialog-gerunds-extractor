@@ -195,7 +195,7 @@ struct ContentView: View {
 
             if store.isProcessing {
                 ProcessingView()
-            } else if store.hits.isEmpty, store.section != .exceptions {
+            } else if store.hits.isEmpty, store.section != .exceptions, store.section != .consulta {
                 WelcomeView()
             } else {
                 switch store.section {
@@ -207,6 +207,8 @@ struct ContentView: View {
                     FrequencyView()
                 case .exceptions:
                     ExceptionsView()
+                case .consulta:
+                    ConsultaView()
                 }
             }
         }

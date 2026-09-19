@@ -3,7 +3,7 @@ import SwiftUI
 enum Brand {
     static let name = "Andante"
     static let authors = "Alain Iglesias  ·  Ailyn Figueroa González"
-    static let subtitle = "Gerundios del corpus"
+    static let subtitle = "Consulta sobre un corpus"
 
     static var version: String {
         let value = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
@@ -61,6 +61,7 @@ enum AppSection: String, CaseIterable, Identifiable {
     case concordance
     case frequency
     case exceptions
+    case consulta
 
     var id: String { rawValue }
 
@@ -70,6 +71,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .concordance: "Concordancia"
         case .frequency: "Frecuencias"
         case .exceptions: "Excepciones"
+        case .consulta: "Consulta"
         }
     }
 
@@ -79,6 +81,7 @@ enum AppSection: String, CaseIterable, Identifiable {
         case .concordance: "text.quote"
         case .frequency: "list.number"
         case .exceptions: "minus.circle"
+        case .consulta: "magnifyingglass"
         }
     }
 }

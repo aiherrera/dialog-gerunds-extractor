@@ -28,7 +28,13 @@ final class CorpusStore {
     var queryKind = "gerundios"
     var queryReading = ""
     var queryRequest = ""
+    var consultaDraft = ""
+    var consultaReading = ""
+    var consultaKind = ""
+    var consultaMessage = ""
+    var consultaOk = false
     private var concordanceURL: URL?
+    private var interpretGeneration = 0
     private var summary = ResultSnapshot()
     private var refreshTask: Task<Void, Never>?
     private var interviews: [String: [String]]?
@@ -502,6 +508,88 @@ final class CorpusStore {
             }
         }
         return nil
+    }
+
+    func scheduleInterpret() {
+        interpretGeneration += 1
+        let generation = interpretGeneration
+        let text = consultaDraft
+        Task {
+            try? await Task.sleep(for: .milliseconds(160))
+            guard generation == interpretGeneration else { return }
+            await interpretNow(text)
+        }
+    }
+
+    func interpretNow(_ text: String) async {
+        guard let project = ProjectPaths.root(), let node = ProjectPaths.node() else {
+            consultaOk = false
+            consultaReading = ""
+            consultaKind = ""
+            consultaMessage = "No encuentro Node.js junto al proyecto."
+            return
+        }
+        let result = await RequestInterpreter.read(text, project: project, node: node)
+        guard text == consultaDraft else { return }
+        consultaOk = result.ok
+        consultaReading = result.reading
+        consultaKind = result.kind
+        consultaMessage = result.ok ? "" : result.message
+    }
+
+    func runConsulta() async {
+        guard !isProcessing, consultaOk else { return }
+        guard let project = ProjectPaths.root() else {
+            consultaMessage = "No encuentro el proyecto junto a la app."
+            return
+        }
+        guard let node = ProjectPaths.node() else {
+            consultaMessage = "No encuentro Node.js en esta Mac."
+            return
+        }
+        let cache = project.appendingPathComponent("output/cache/interviews.json")
+        let converted = project.appendingPathComponent("output/converted_to_docx")
+        if !FileManager.default.fileExists(atPath: cache.path),
+           !FileManager.default.fileExists(atPath: converted.path) {
+            consultaMessage = "Procesa el corpus una vez para poder consultar."
+            return
+        }
+
+        isProcessing = true
+        processError = nil
+        consultaMessage = ""
+        if !consultaKind.isEmpty { queryKind = consultaKind }
+        queryReading = consultaReading
+        queryRequest = consultaDraft
+        progress = ProcessProgress(corpusName: consultaDraft)
+        do {
+            let concordance = try await CorpusRunner.run(
+                project: project,
+                node: node,
+                arguments: [
+                    project.appendingPathComponent("index.js").path,
+                    "--query",
+                    "--request", consultaDraft,
+                    "--output", project.appendingPathComponent("output").path,
+                    "--progress",
+                ]
+            ) { wire in
+                Task { @MainActor in
+                    self.apply(wire)
+                }
+            }
+            load(URL(fileURLWithPath: concordance))
+            query = ""
+            speaker = .all
+            ending = .all
+            pronoun = .all
+            group = "Todas"
+            section = .overview
+            isProcessing = false
+        } catch {
+            consultaMessage = error.localizedDescription
+            isProcessing = false
+        }
     }
 
     var visibleExclusions: [String] {

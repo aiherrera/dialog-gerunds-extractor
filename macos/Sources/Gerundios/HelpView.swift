@@ -8,7 +8,7 @@ struct HelpView: View {
                     Text("Ayuda")
                         .font(.system(size: 30, weight: .semibold, design: .serif))
                         .foregroundStyle(Theme.ink)
-                    Text("Andante enumera los gerundios de un corpus de entrevistas y los muestra para revisarlos.")
+                    Text("Andante identifica los gerundios de un corpus de entrevistas y los señala para revisarlos.")
                         .font(.system(size: 15, design: .serif))
                         .foregroundStyle(Theme.ink)
                         .fixedSize(horizontal: false, vertical: true)
@@ -22,7 +22,7 @@ struct HelpView: View {
 
                 section("Qué cuenta", paragraphs: [
                     "Un gerundio es una forma en -ando, -iendo o -yendo, con o sin pronombre, como dándole. También cuenta una palabra partida por una marca de transcripción, como conversa<alargamiento/>ndo.",
-                    "Una excepción es una palabra que no debe marcarse. Se compara la palabra entera y se conserva la tilde. Se escriben a mano o se importa un archivo. Importar añade a la lista: no la sustituye. Entran al volver a procesar el corpus.",
+                    "Una excepción es una palabra que no debe marcarse. Se compara la palabra entera y se conserva la tilde. Se escriben a mano o se importa un archivo. Importar añade a la lista: no la sustituye. Reprocesar vuelve a leer la misma carpeta con la lista actual.",
                 ])
 
                 section("Las pantallas", paragraphs: [

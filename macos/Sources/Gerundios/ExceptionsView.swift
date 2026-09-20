@@ -32,7 +32,7 @@ struct ExceptionsView: View {
                 Text(caption)
                     .font(.system(size: 13))
                     .foregroundStyle(Theme.muted)
-                Text("La comparación es la palabra entera y conserva la tilde. Se aplican al procesar el corpus.")
+                Text("La comparación es la palabra entera y conserva la tilde. Reprocesar vuelve a leer la misma carpeta con esta lista.")
                     .font(.system(size: 12, design: .serif))
                     .foregroundStyle(Theme.muted)
             }
@@ -67,6 +67,21 @@ struct ExceptionsView: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(self.store.isProcessing)
+
+                Button {
+                    self.store.reprocess()
+                } label: {
+                    Text("Reprocesar")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.55), in: Capsule())
+                        .overlay(Capsule().stroke(Theme.rule, lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .disabled(!self.store.canReprocess)
+                .help("Vuelve a leer el corpus con la lista actual")
 
                 Spacer(minLength: 12)
 

@@ -79,7 +79,7 @@ The processed files with highlighted gerunds will be saved in the following dire
 Andante is the screenshot window. **Elegir corpus** opens the `corpus` folder and processes it; when it finishes, the summary is on screen. Concordance, frequencies, and the summary use the same filters.
 
 ```bash
-macos/open.command
+pnpm app
 ```
 
 The app is `macos/Andante.app`.

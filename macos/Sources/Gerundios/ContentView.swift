@@ -31,6 +31,11 @@ struct GerundiosApp: App {
                 }
                 .keyboardShortcut("o")
                 .disabled(store.isProcessing)
+                Button("Reprocesar") {
+                    store.reprocess()
+                }
+                .keyboardShortcut("r")
+                .disabled(!store.canReprocess)
                 Button("Limpiar corpus") {
                     store.clearCorpus()
                 }
@@ -139,6 +144,21 @@ struct ContentView: View {
             }
             .buttonStyle(.plain)
             .disabled(store.isProcessing)
+            .padding(.horizontal, 10)
+
+            Button {
+                store.reprocess()
+            } label: {
+                Label("Reprocesar", systemImage: "arrow.clockwise")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(store.canReprocess ? Theme.ink : Theme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 7)
+                    .padding(.horizontal, 10)
+            }
+            .buttonStyle(.plain)
+            .disabled(!store.canReprocess)
+            .help("Vuelve a leer el corpus con la lista actual")
             .padding(.horizontal, 10)
 
             Button {

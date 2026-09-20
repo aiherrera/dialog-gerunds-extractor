@@ -25,6 +25,7 @@ final class CorpusStore {
     var exclusionDraft = ""
     var exclusionQuery = ""
     var exclusionNote: String?
+    private var corpusURL: URL?
     var queryKind = "gerundios"
     var queryReading = ""
     var queryRequest = ""
@@ -54,13 +55,14 @@ final class CorpusStore {
             if text.isEmpty { return "resultados" }
             if text.count <= 42 { return text }
             return String(text.prefix(41)) + "…"
-        default: return "gerundios\nresaltados"
+        default: return "gerundios\nencontrados"
         }
     }
 
     init() {
         loadExclusions()
-        if let corpus = ProjectPaths.corpusDirectory() {
+        if let corpus = Self.rememberedCorpus() ?? Self.projectCorpus() {
+            corpusURL = corpus
             corpusLabel = corpus.lastPathComponent
         }
         if let url = Self.findDefault() {
@@ -342,7 +344,20 @@ final class CorpusStore {
         panel.message = "Elige la carpeta con las entrevistas del corpus."
         panel.directoryURL = ProjectPaths.corpusDirectory()
         guard panel.runModal() == .OK, let url = panel.url else { return }
+        rememberCorpus(url)
         Task { await process(corpus: url) }
+    }
+
+    var canReprocess: Bool {
+        guard !isProcessing, let corpusURL else { return false }
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: corpusURL.path, isDirectory: &isDirectory)
+        return exists && isDirectory.boolValue
+    }
+
+    func reprocess() {
+        guard let corpusURL, canReprocess else { return }
+        Task { await process(corpus: corpusURL) }
     }
 
     func clearCorpus() {
@@ -412,6 +427,7 @@ final class CorpusStore {
         queryKind = "gerundios"
         queryReading = "Gerundios en -ando, -iendo o -yendo, con o sin pronombre."
         queryRequest = "gerundios"
+        rememberCorpus(corpus)
         let folder = corpus.lastPathComponent
         progress = ProcessProgress(corpusName: folder)
         corpusLabel = folder
@@ -621,6 +637,31 @@ final class CorpusStore {
 
     private static func exclusionFile() -> URL? {
         ProjectPaths.root()?.appendingPathComponent("utils/exclusion_list.txt")
+    }
+
+    private static let corpusPathKey = "andante.corpusPath"
+
+    private func rememberCorpus(_ url: URL) {
+        corpusURL = url
+        UserDefaults.standard.set(url.path, forKey: Self.corpusPathKey)
+    }
+
+    private static func rememberedCorpus() -> URL? {
+        guard let path = UserDefaults.standard.string(forKey: corpusPathKey) else { return nil }
+        guard isCorpusDirectory(path) else { return nil }
+        return URL(fileURLWithPath: path)
+    }
+
+    private static func projectCorpus() -> URL? {
+        guard let corpus = ProjectPaths.corpusDirectory(), corpus.lastPathComponent == "corpus" else { return nil }
+        guard isCorpusDirectory(corpus.path) else { return nil }
+        return corpus
+    }
+
+    private static func isCorpusDirectory(_ path: String) -> Bool {
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory)
+        return exists && isDirectory.boolValue
     }
 
     private static func readText(at url: URL) -> String? {

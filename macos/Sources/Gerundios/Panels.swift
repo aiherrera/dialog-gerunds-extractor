@@ -75,7 +75,7 @@ struct OverviewView: View {
                 FigureHeader(title: "Resumen")
                     .padding(.horizontal, -28)
 
-                HStack(alignment: .firstTextBaseline, spacing: 18) {
+                HStack(alignment: .lastTextBaseline, spacing: 14) {
                     Text(store.snapshot.total.formatted(.number.grouping(.automatic)))
                         .font(.system(size: 64, weight: .semibold, design: .serif))
                         .monospacedDigit()
@@ -83,8 +83,10 @@ struct OverviewView: View {
                     Text(store.resultNoun)
                         .font(.system(size: 16, design: .serif))
                         .foregroundStyle(Theme.muted)
+                        .lineSpacing(1)
                         .lineLimit(3)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: true, vertical: true)
                 }
 
                 HStack(alignment: .top, spacing: 22) {

@@ -2,7 +2,7 @@ import SwiftUI
 
 enum Brand {
     static let name = "Andante"
-    static let authors = "Alain Iglesias  ·  Ailyn Figueroa González"
+    static let authors = "Alain Iglesias  ·  Ailyn Figueroa"
     static let subtitle = "Gerundios del corpus"
 
     static var version: String {

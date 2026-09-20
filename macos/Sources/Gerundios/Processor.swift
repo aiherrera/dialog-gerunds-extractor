@@ -23,7 +23,18 @@ struct CorpusRunError: LocalizedError {
 }
 
 enum ProjectPaths {
-    static func root() -> URL? {
+    static func engineRoot() -> URL? {
+        if let resources = Bundle.main.resourceURL {
+            let engine = resources.appendingPathComponent("engine")
+            let index = engine.appendingPathComponent("index.js")
+            if FileManager.default.fileExists(atPath: index.path) { return engine }
+        }
+        return sourceRoot()
+    }
+
+    static func root() -> URL? { engineRoot() }
+
+    static func sourceRoot() -> URL? {
         let manager = FileManager.default
         var starts = [URL(fileURLWithPath: manager.currentDirectoryPath)]
         if let executable = Bundle.main.executableURL {
@@ -35,8 +46,8 @@ enum ProjectPaths {
             var current = start
             for _ in 0..<8 {
                 let index = current.appendingPathComponent("index.js")
-                let exclusion = current.appendingPathComponent("utils/exclusion_list.txt")
-                if manager.fileExists(atPath: index.path), manager.fileExists(atPath: exclusion.path) {
+                let package = current.appendingPathComponent("package.json")
+                if manager.fileExists(atPath: index.path), manager.fileExists(atPath: package.path) {
                     return current
                 }
                 let parent = current.deletingLastPathComponent()
@@ -47,8 +58,37 @@ enum ProjectPaths {
         return nil
     }
 
+    static func supportDirectory() -> URL {
+        let url = FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Andante", isDirectory: true)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
+    static func outputDirectory() -> URL {
+        if let source = sourceRoot() {
+            return source.appendingPathComponent("output")
+        }
+        let output = supportDirectory().appendingPathComponent("output", isDirectory: true)
+        try? FileManager.default.createDirectory(at: output, withIntermediateDirectories: true)
+        return output
+    }
+
+    static func exclusionFile() -> URL {
+        let file = supportDirectory().appendingPathComponent("andante-exceptions.txt")
+        if !FileManager.default.fileExists(atPath: file.path) {
+            try? Data().write(to: file)
+        }
+        return file
+    }
+
     static func node() -> URL? {
         let manager = FileManager.default
+        if let bundled = Bundle.main.resourceURL?.appendingPathComponent("node"),
+           manager.isExecutableFile(atPath: bundled.path) {
+            return bundled
+        }
         let nvm = manager.homeDirectoryForCurrentUser.appendingPathComponent(".nvm/versions/node")
         let versions = (try? manager.contentsOfDirectory(at: nvm, includingPropertiesForKeys: nil)) ?? []
         let bins = versions

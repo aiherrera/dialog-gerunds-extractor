@@ -188,8 +188,10 @@ final class CorpusStore {
     private func resolveTurn(for hit: Hit) async {
         guard let index = hit.paragraph else { return }
         if interviews == nil {
-            guard let root = ProjectPaths.root() else { return }
-            let url = root.appendingPathComponent("output/cache/interviews.json")
+            guard let concordanceURL else { return }
+            let url = concordanceURL
+                .deletingLastPathComponent()
+                .appendingPathComponent("cache/interviews.json")
             let loaded: [String: [String]]? = await Task.detached(priority: .utility) {
                 guard let data = try? Data(contentsOf: url),
                       let file = try? JSONDecoder().decode(InterviewCache.self, from: data) else { return nil }
@@ -403,24 +405,24 @@ final class CorpusStore {
     }
 
     private func removeGeneratedOutput() throws {
-        guard let concordanceURL, let root = ProjectPaths.root() else { return }
-        let output = root.appendingPathComponent("output").standardizedFileURL
-        let file = concordanceURL.standardizedFileURL
-        let inside = file.path == output.path || file.path.hasPrefix(output.path + "/")
-        guard inside, FileManager.default.fileExists(atPath: output.path) else { return }
+        guard let concordanceURL else { return }
+        let output = concordanceURL.deletingLastPathComponent().standardizedFileURL
+        guard output.lastPathComponent == "output" else { return }
+        guard FileManager.default.fileExists(atPath: output.path) else { return }
         try FileManager.default.removeItem(at: output)
     }
 
     func process(corpus: URL) async {
         guard !isProcessing else { return }
-        guard let project = ProjectPaths.root() else {
-            processError = "No encuentro el proyecto junto a la app."
+        guard let project = ProjectPaths.engineRoot() else {
+            processError = "No encuentro el motor de Andante."
             return
         }
         guard let node = ProjectPaths.node() else {
-            processError = "No encuentro Node.js en esta Mac."
+            processError = "No encuentro Node.js dentro de la app."
             return
         }
+        let exclusions = ProjectPaths.exclusionFile()
 
         isProcessing = true
         processError = nil
@@ -444,7 +446,8 @@ final class CorpusStore {
                 arguments: [
                     project.appendingPathComponent("index.js").path,
                     "--corpus", corpus.path,
-                    "--output", project.appendingPathComponent("output").path,
+                    "--output", ProjectPaths.outputDirectory().path,
+                    "--exclusions", exclusions.path,
                     "--progress",
                 ]
             ) { wire in
@@ -499,6 +502,10 @@ final class CorpusStore {
     }
 
     static func findDefault() -> URL? {
+        if ProjectPaths.sourceRoot() == nil {
+            let support = ProjectPaths.outputDirectory().appendingPathComponent("concordance.json")
+            if FileManager.default.fileExists(atPath: support.path) { return support }
+        }
         var starts = [URL(fileURLWithPath: FileManager.default.currentDirectoryPath)]
         if let executable = Bundle.main.executableURL {
             starts.append(executable.deletingLastPathComponent())
@@ -527,10 +534,7 @@ final class CorpusStore {
     }
 
     func loadExclusions() {
-        guard let url = Self.exclusionFile() else {
-            exclusionNote = "No encuentro utils/exclusion_list.txt junto al proyecto."
-            return
-        }
+        let url = Self.exclusionFile()
         guard FileManager.default.fileExists(atPath: url.path) else {
             exclusions = []
             return
@@ -563,9 +567,7 @@ final class CorpusStore {
         panel.message = "Una forma por línea, o varias separadas por comas."
         panel.allowedContentTypes = [.plainText, .utf8PlainText, .commaSeparatedText]
         panel.allowsOtherFileTypes = true
-        if let root = ProjectPaths.root() {
-            panel.directoryURL = root.appendingPathComponent("utils")
-        }
+        panel.directoryURL = ProjectPaths.exclusionFile().deletingLastPathComponent()
         guard panel.runModal() == .OK, let url = panel.url else { return }
 
         let accessing = url.startAccessingSecurityScopedResource()
@@ -628,15 +630,12 @@ final class CorpusStore {
     }
 
     private func saveExclusions() throws {
-        guard let url = Self.exclusionFile() else {
-            throw CorpusRunError(message: "No encuentro la carpeta del proyecto.")
-        }
         let text = exclusions.joined(separator: "\n") + "\n"
-        try text.write(to: url, atomically: true, encoding: .utf8)
+        try text.write(to: Self.exclusionFile(), atomically: true, encoding: .utf8)
     }
 
-    private static func exclusionFile() -> URL? {
-        ProjectPaths.root()?.appendingPathComponent("utils/exclusion_list.txt")
+    private static func exclusionFile() -> URL {
+        ProjectPaths.exclusionFile()
     }
 
     private static let corpusPathKey = "andante.corpusPath"

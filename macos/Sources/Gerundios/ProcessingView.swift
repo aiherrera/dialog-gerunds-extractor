@@ -16,14 +16,12 @@ struct Mark: View {
                     .foregroundStyle(Theme.ink)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Theme.paper)
+                    .clipShape(RoundedRectangle(cornerRadius: size * 0.225, style: .continuous))
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: size * 0.22, style: .continuous)
-                .stroke(Theme.rule, lineWidth: 1)
-        )
+        .compositingGroup()
+        .shadow(color: Color.black.opacity(0.28), radius: max(3, size * 0.12), y: max(2, size * 0.05))
     }
 }
 

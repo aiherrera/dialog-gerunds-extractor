@@ -30,7 +30,9 @@ const outputDirectory = path.resolve(
 );
 const convertedOutputDirectory = path.join(outputDirectory, "converted_to_docx");
 const highlightedOutputDirectory = path.join(outputDirectory, "highlighted");
-const exclusionListPath = path.join(__dirname, "utils", "exclusion_list.txt");
+const exclusionListPath = path.resolve(
+  option("--exclusions", path.join(__dirname, "utils", "exclusion_list.txt"))
+);
 
 const emit = (payload) => {
   if (!progress) return;

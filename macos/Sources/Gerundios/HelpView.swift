@@ -22,7 +22,7 @@ struct HelpView: View {
 
                 section("Qué cuenta", paragraphs: [
                     "Un gerundio es una forma en -ando, -iendo o -yendo, con o sin pronombre, como dándole. También cuenta una palabra partida por una marca de transcripción, como conversa<alargamiento/>ndo.",
-                    "Una excepción es una palabra que no debe marcarse. Se compara la palabra entera y se conserva la tilde. Se escriben a mano o se importa un archivo. Importar añade a la lista: no la sustituye. Reprocesar vuelve a leer la misma carpeta con la lista actual.",
+                    "Una excepción es una palabra que no debe marcarse. Andante no trae una lista hecha: empieza vacía. Se compara la palabra entera y se conserva la tilde. Se escriben a mano o se importa un archivo. Importar añade a la lista: no la sustituye. Reprocesar vuelve a leer la misma carpeta con la lista actual.",
                 ])
 
                 section("Las pantallas", paragraphs: [
